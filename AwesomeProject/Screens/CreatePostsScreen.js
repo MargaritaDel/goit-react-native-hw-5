@@ -1,6 +1,4 @@
-import * as Location from "expo-location";
-import { useState, useEffect, useRef } from "react";
-import { Camera } from "expo-camera";
+import React, { useState, useEffect } from 'react';
 import {
   Text,
   StyleSheet,
@@ -11,131 +9,168 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  Image,
-} from "react-native";
-import { MaterialIcons } from "@expo/vector-icons";
-import { Ionicons } from "@expo/vector-icons";
-import { FontAwesome5 } from "@expo/vector-icons";
+} from 'react-native';
+import { Camera } from 'expo-camera';
+import * as Location from 'expo-location';
+import * as MediaLibrary from 'expo-media-library';
+import { useNavigation } from '@react-navigation/native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import { FontAwesome5 } from '@expo/vector-icons';
 
 export default function CreatePostsScreen() {
-  const [name, setName] = useState("");
-  const [image, setImage] = useState(null);
-  const [location, setLocation] = useState("");
+  const [name, setName] = useState('');
+  const [location, setLocation] = useState('');
   const [isShowKeyboard, setIsShowKeyboard] = useState(false);
   const [isNameFocus, setIsNameFocus] = useState(false);
   const [isLocationFocus, setIsLocationFocus] = useState(false);
-  const [cameraPermission, setCameraPermission] = useState(null);
-  const [locationPermission, setLocationPermission] = useState(null);
-  const cameraRef = useRef(null);
+  const [hasPermission, setHasPermission] = useState(null);
+
+  const [camera, setCamera] = useState(null);
+  const [photo, setPhoto] = useState(null);
+  const [photoLocation, setPhotoLocation] = useState(null);
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    (async () => {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      await MediaLibrary.requestPermissionsAsync();
+
+      setHasPermission(status === 'granted');
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Permission to access location was denied');
+      }
+
+      let location = await Location.getCurrentPositionAsync({});
+      const coords = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      };
+      setPhotoLocation(coords);
+    })();
+  }, [photo]);
+
+  const takePhoto = async () => {
+    if (camera) {
+      const { uri } = await camera.takePictureAsync();
+      console.log(uri);
+      setPhoto(uri);
+      const asset = await MediaLibrary.createAssetAsync(uri);
+      return asset;
+    }
+  };
 
   const keyboardHide = () => {
     setIsShowKeyboard(false);
     Keyboard.dismiss();
   };
 
-  useEffect(() => {
-    (async () => {
-      const { status: cameraStatus } = await Camera.requestPermissionsAsync();
-      setCameraPermission(cameraStatus === "granted");
-
-      const { status: locationStatus } = await Location.requestForegroundPermissionsAsync();
-      setLocationPermission(locationStatus === "granted");
-    })();
-  }, []);
-
-  const takePicture = async () => {
-    if (cameraRef.current) {
-      const photo = await cameraRef.current.takePictureAsync();
-      setImage(photo.uri);
-    }
+  const sendPhoto = () => {
+    navigation.navigate('PostsScreen', { photo, name, location, ...photoLocation });
+    setName('');
+    setLocation('');
+    setPhoto(null);
+    setIsShowKeyboard(false);
   };
+  const deletePhoto = () => {
+    navigation.navigate('PostsScreen');
+    setName('');
+    setPhotoLocation('');
+    setPhoto(null);
+        
+            
+          
+  };
+  
+
+  // const navigateToCommentsScreen = () => {
+  //   navigation.navigate('CommentsScreen');
+  // };
+
+  // const navigateToMapScreen = () => {
+  //   navigation.navigate('MapScreen', { photoLocation });
+  // };
 
   return (
     <View style={styles.container}>
-      {image ? (
-        <Image source={{ uri: image }} style={styles.capturedImage} />
-      ) : (
-        <TouchableWithoutFeedback onPress={keyboardHide}>
-          <View>
-            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-              {!isShowKeyboard && (
-                <View>
-                  <View style={styles.imageBackground}>
-                    <View style={styles.photoIconWrap}>
-                      <MaterialIcons
-                        name="photo-camera"
-                        size={24}
-                        color="#BDBDBD"
-                      />
-                    </View>
-                  </View>
-                  {cameraPermission && (
-                    <Camera
-                      style={styles.camera}
-                      ref={cameraRef}
-                      type={Camera.Constants.Type.back}
-                    />
-                  )}
-                  <Text style={styles.text}>Загрузите фото</Text>
-                </View>
-              )}
+      <TouchableWithoutFeedback onPress={keyboardHide}>
+        <View>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : null}>
+            {!isShowKeyboard && (
+              <View>
+                <Camera style={styles.camera} ref={ref => setCamera(ref)}>
+                  <Pressable onPress={takePhoto} style={styles.snapContainer}>
+                    <MaterialIcons name="photo-camera" size={24} color="#BDBDBD" />
+                  </Pressable>
+                </Camera>
+                <Text style={styles.text}>Завантажте фото</Text>
+              </View>
+            )}
 
+            <TextInput
+              value={name}
+              onChangeText={value => setName(value)}
+              placeholder="Назва..."
+              placeholderTextColor="#BDBDBD"
+              onFocus={() => {
+                setIsShowKeyboard(true);
+                setIsNameFocus(true);
+              }}
+              onBlur={() => setIsNameFocus(false)}
+              style={{
+                ...styles.input,
+                borderBottomColor: isNameFocus ? '#ff6c00' : '#e8e8e8',
+                marginTop: 30,
+              }}
+            />
+
+            <View>
+              <Ionicons
+                name="ios-location-outline"
+                size={24}
+                color="#BDBDBD"
+                style={{
+                  ...styles.locationIcon,
+                  color: isLocationFocus ? '#ff6c00' : '#BDBDBD',
+                }}
+              />
               <TextInput
-                value={name}
-                onChangeText={(value) => setName(value)}
-                placeholder="Название..."
+                value={location}
+                onChangeText={value => setLocation(value)}
+                placeholder="Місцевість..."
                 placeholderTextColor="#BDBDBD"
                 onFocus={() => {
                   setIsShowKeyboard(true);
-                  setIsNameFocus(true);
+                  setIsLocationFocus(true);
                 }}
-                onBlur={() => setIsNameFocus(false)}
+                onBlur={() => setIsLocationFocus(false)}
                 style={{
                   ...styles.input,
-                  borderBottomColor: isNameFocus ? "#ff6c00" : "#e8e8e8",
+                  borderBottomColor: isLocationFocus ? '#ff6c00' : '#e8e8e8',
                   marginTop: 30,
+                  paddingLeft: 25,
                 }}
               />
-              <View>
-                <Ionicons
-                  name="ios-location-outline"
-                  size={24}
-                  color="#BDBDBD"
-                  style={{
-                    ...styles.locationIcon,
-                    color: isLocationFocus ? "#ff6c00" : "#BDBDBD",
-                  }}
-                />
-                <TextInput
-                  value={location}
-                  onChangeText={(value) => setLocation(value)}
-                  placeholder="Местоположение..."
-                  placeholderTextColor="#BDBDBD"
-                  onFocus={() => {
-                    setIsShowKeyboard(true);
-                    setIsLocationFocus(true);
-                  }}
-                  onBlur={() => setIsLocationFocus(false)}
-                  style={{
-                    ...styles.input,
-                    borderBottomColor: isLocationFocus ? "#ff6c00" : "#e8e8e8",
-                    marginTop: 30,
-                    paddingLeft: 25,
-                  }}
-                />
-              </View>
-              <Pressable style={styles.button}>
-                <Text style={styles.buttonText}>Опубликовать</Text>
+            </View>
+
+            <Pressable onPress={sendPhoto} style={styles.sendBtn}>
+              <Text style={styles.buttonText}>Опубліковати</Text>
+            </Pressable>
+
+            <View style={styles.trashIconWrap}>
+              <Pressable onPress={deletePhoto}style={styles.trashButton}>
+                <FontAwesome5 name="trash-alt" size={24} color="#DADADA" />
               </Pressable>
-              <View style={styles.trashIconWrap}>
-                <Pressable style={styles.captureButton} onPress={takePicture}>
-                  <Text style={styles.captureButtonText}>Capture</Text>
-                </Pressable>
-              </View>
-            </KeyboardAvoidingView>
-          </View>
-        </TouchableWithoutFeedback>
-      )}
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </TouchableWithoutFeedback>
     </View>
   );
 }
@@ -145,67 +180,68 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 28,
-    backgroundColor: "#fff",
+    backgroundColor: '#fff',
   },
-  imageBackground: {
-    width: "100%",
+  camera: {
+    width: '100%',
     height: 200,
-    backgroundColor: "#F6F6F6",
+    backgroundColor: '#F6F6F6',
     borderWidth: 1,
-    borderColor: "#E8E8E8",
+    borderColor: '#E8E8E8',
     borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  photoIconWrap: {
+  snapContainer: {
     width: 60,
     height: 60,
-    backgroundColor: "#fff",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: '#FFFFFF4D',
+    justifyContent: 'center',
+    alignItems: 'center',
     borderRadius: 50,
   },
   text: {
     marginTop: 8,
     fontSize: 16,
-    fontFamily: "Roboto-Regular",
-    color: "#BDBDBD",
+    fontFamily: 'Roboto-Regular',
+    color: '#BDBDBD',
     lineHeight: 19,
   },
   input: {
-    width: "100%",
+    width: '100%',
     height: 35,
     borderBottomWidth: 1,
-    borderBottomColor: "#E8E8E8",
+    borderBottomColor: '#E8E8E8',
   },
   locationIcon: {
-    position: "absolute",
+    position: 'absolute',
     bottom: 7,
   },
-  button: {
-    width: "100%",
+  sendBtn: {
+    width: '100%',
     height: 50,
-    backgroundColor: "#F6F6F6",
+    backgroundColor: '#FF6C00',
     borderRadius: 100,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     marginTop: 32,
   },
   buttonText: {
-    fontFamily: "Roboto-Regular",
-    color: "#BDBDBD",
+    fontFamily: 'Roboto-Regular',
+    color: '#FFFFFF',
     fontSize: 16,
   },
-  trashIconWrap: {
-    alignItems: "center",
-    marginTop: 90,
-  },
-  captureButton: {
-    width: 100,
+  trashButton: {
+    width: 70,
     height: 40,
-    backgroundColor: "#F6F6F6",
+    backgroundColor: '#F6F6F6',
     borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
+    textAlign: 'center',
+  },
+  trashIconWrap: {
+    alignItems: 'center',
+    marginTop: 90,
   },
 });
